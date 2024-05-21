@@ -215,10 +215,10 @@ if __name__ == "__main__":
     parser.add_argument('--lr', type=float, default=0.003, metavar='LR', help='Learning rate.')#0.001
     parser.add_argument('--momentum', type=float, default=0, metavar='M', help='SGD momentum (default: 0.9).')
     parser.add_argument('--device', default='cuda:0', type=str, help='device: cpu? cuda?')
-    parser.add_argument('--dataset_path', type=str, default='/mnt/088A6CBB8A6CA742/av1/av1_traj', metavar='N', help='Dataset path.')
+    parser.add_argument('--dataset_path', type=str, default='/home/msc_lab/zxh/MBNSF/data/av1_traj', metavar='N', help='Dataset path.')
     parser.add_argument('--time', dest='time', action='store_true', default=True, help='Count the execution time of each step.')
     parser.add_argument('--traj_len', type=int, default=25, help='point cloud sequence length for the trajectory.')
-    parser.add_argument('--enforce_skip_metrics', action='store_true')
+    parser.add_argument('--enforce_skip_metrics', action='store_true', default=False)
 
     # For neural prior
     parser.add_argument('--weight_decay', type=float, default=0, metavar='N', help='Weight decay.')
@@ -273,9 +273,10 @@ if __name__ == "__main__":
 
         pc_list = [data['pcs'][i] for i in range(options.traj_len)]
         try:
-            if option.enforce_skip_metrics: assert 0==1
+            if options.enforce_skip_metrics: assert 0==1
             flow_gt_list = [data['flos'][i] for i in range(options.traj_len-1)]
             skip_metrics = False
+            print("Founded flow gt data. Training along with metrics calculation.")
         except:
             skip_metrics = True
             flow_gt_list = None

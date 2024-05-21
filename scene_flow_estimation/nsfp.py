@@ -250,7 +250,7 @@ if __name__ == "__main__":
 
         pc_list = [data['pcs'][i] for i in range(options.traj_len)]
         try:
-            if option.enforce_skip_metrics: assert 0==1
+            if options.enforce_skip_metrics: assert 0==1
             flow_gt_list = [data['flos'][i] for i in range(options.traj_len-1)]
             traj_gt = data['traj'][:, :options.traj_len]
             traj_val_mask = data['traj_val_mask'][:, :options.traj_len]
