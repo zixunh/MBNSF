@@ -2,6 +2,7 @@
 *.pickle
 *.pth
 log*
+*.log
 __pycache__
 slurm*
 .vscode
@@ -9,3 +10,4 @@ test*
 checkpoints/
 *debug.py
 *.zip
+*.npz

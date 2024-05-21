@@ -182,18 +182,18 @@ def fit_sequence_of_scene_flow_field(
         # ANCHOR: Run scene flow estimation
         flow_pred, info_dict_forward = sceneflow_deep_prior(pc1, pc2, info_dict, options)
 
-
         # evaluate flow metrics
-        EPE3D_1, acc3d_strict_1, acc3d_relax_1, outlier_1, angle_error_1 = scene_flow_metrics(flow_pred.unsqueeze(0),
-            torch.from_numpy(flow_gt_list[i]).unsqueeze(0))
-        logging.info(f" [EPE: {EPE3D_1:.3f}] [Acc strict: {acc3d_strict_1 * 100:.3f}%]"
-                    f" [Acc relax: {acc3d_relax_1 * 100:.3f}%] [Angle error (rad): {angle_error_1:.3f}]"
-                    f" [Outl.: {outlier_1 * 100:.3f}%]")
-        cur_metrics['epe'][i] = EPE3D_1
-        cur_metrics['acc_strict'][i] = acc3d_strict_1
-        cur_metrics['acc_relax'][i] = acc3d_relax_1
-        cur_metrics['angle_error'][i] = angle_error_1
-        cur_metrics['outlier'][i] = outlier_1
+        if flow_gt_list is not None:
+            EPE3D_1, acc3d_strict_1, acc3d_relax_1, outlier_1, angle_error_1 = scene_flow_metrics(flow_pred.unsqueeze(0),
+                torch.from_numpy(flow_gt_list[i]).unsqueeze(0))
+            logging.info(f" [EPE: {EPE3D_1:.3f}] [Acc strict: {acc3d_strict_1 * 100:.3f}%]"
+                        f" [Acc relax: {acc3d_relax_1 * 100:.3f}%] [Angle error (rad): {angle_error_1:.3f}]"
+                        f" [Outl.: {outlier_1 * 100:.3f}%]")
+            cur_metrics['epe'][i] = EPE3D_1
+            cur_metrics['acc_strict'][i] = acc3d_strict_1
+            cur_metrics['acc_relax'][i] = acc3d_relax_1
+            cur_metrics['angle_error'][i] = angle_error_1
+            cur_metrics['outlier'][i] = outlier_1
         cur_metrics['time'][i] = info_dict_forward['time']
 
         # save info_dict
@@ -218,7 +218,8 @@ if __name__ == "__main__":
     parser.add_argument('--dataset_path', type=str, default='/mnt/088A6CBB8A6CA742/av1/av1_traj', metavar='N', help='Dataset path.')
     parser.add_argument('--time', dest='time', action='store_true', default=True, help='Count the execution time of each step.')
     parser.add_argument('--traj_len', type=int, default=25, help='point cloud sequence length for the trajectory.')
-    
+    parser.add_argument('--enforce_skip_metrics', action='store_true')
+
     # For neural prior
     parser.add_argument('--weight_decay', type=float, default=0, metavar='N', help='Weight decay.')
     parser.add_argument('--hidden_units', type=int, default=128, metavar='N', help='Number of hidden units in neural prior')
@@ -271,17 +272,25 @@ if __name__ == "__main__":
         data = np.load(fi_name, allow_pickle=True)
 
         pc_list = [data['pcs'][i] for i in range(options.traj_len)]
-        flow_gt_list = [data['flos'][i] for i in range(options.traj_len-1)]
+        try:
+            if option.enforce_skip_metrics: assert 0==1
+            flow_gt_list = [data['flos'][i] for i in range(options.traj_len-1)]
+            skip_metrics = False
+        except:
+            skip_metrics = True
+            flow_gt_list = None
+            print("Missing flow gt data. Skipped metrics calculation.")
 
         cur_exp_dir = os.path.join(exp_dir_path, log_id)
         os.makedirs(cur_exp_dir, exist_ok=True)
         
         metrics = fit_sequence_of_scene_flow_field(cur_exp_dir, pc_list, options, flow_gt_list)
-        seq_metrics['epe'][fi_id] = metrics['epe']
-        seq_metrics['acc_strict'][fi_id] = metrics['acc_strict']
-        seq_metrics['acc_relax'][fi_id] = metrics['acc_relax']
-        seq_metrics['angle_error'][fi_id] = metrics['angle_error']
-        seq_metrics['outlier'][fi_id] = metrics['outlier']
+        if not skip_metrics:
+            seq_metrics['epe'][fi_id] = metrics['epe']
+            seq_metrics['acc_strict'][fi_id] = metrics['acc_strict']
+            seq_metrics['acc_relax'][fi_id] = metrics['acc_relax']
+            seq_metrics['angle_error'][fi_id] = metrics['angle_error']
+            seq_metrics['outlier'][fi_id] = metrics['outlier']
         seq_metrics['time'][fi_id] = metrics['time']
     seq_metrics_mean = {label:round(seq_metrics[label].mean(), 4) for label in seq_metrics.keys()}
     logging.info('---------------------------------------')

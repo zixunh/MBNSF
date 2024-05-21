@@ -167,16 +167,17 @@ def fit_sequence_of_scene_flow_field(
         info_dict_forward_lst.append(info_dict_forward)
 
         # evaluate flow metrics
-        EPE3D_1, acc3d_strict_1, acc3d_relax_1, outlier_1, angle_error_1 = scene_flow_metrics(flow_pred.unsqueeze(0),
-            torch.from_numpy(flow_gt_list[i]).unsqueeze(0))
-        logging.info(f" [EPE: {EPE3D_1:.3f}] [Acc strict: {acc3d_strict_1 * 100:.3f}%]"
-                    f" [Acc relax: {acc3d_relax_1 * 100:.3f}%] [Angle error (rad): {angle_error_1:.3f}]"
-                    f" [Outl.: {outlier_1 * 100:.3f}%]")
-        cur_metrics['epe'][i] = EPE3D_1
-        cur_metrics['acc_strict'][i] = acc3d_strict_1
-        cur_metrics['acc_relax'][i] = acc3d_relax_1
-        cur_metrics['angle_error'][i] = angle_error_1
-        cur_metrics['outlier'][i] = outlier_1
+        if flow_gt_list is not None:
+            EPE3D_1, acc3d_strict_1, acc3d_relax_1, outlier_1, angle_error_1 = scene_flow_metrics(flow_pred.unsqueeze(0),
+                torch.from_numpy(flow_gt_list[i]).unsqueeze(0))
+            logging.info(f" [EPE: {EPE3D_1:.3f}] [Acc strict: {acc3d_strict_1 * 100:.3f}%]"
+                        f" [Acc relax: {acc3d_relax_1 * 100:.3f}%] [Angle error (rad): {angle_error_1:.3f}]"
+                        f" [Outl.: {outlier_1 * 100:.3f}%]")
+            cur_metrics['epe'][i] = EPE3D_1
+            cur_metrics['acc_strict'][i] = acc3d_strict_1
+            cur_metrics['acc_relax'][i] = acc3d_relax_1
+            cur_metrics['angle_error'][i] = angle_error_1
+            cur_metrics['outlier'][i] = outlier_1
         cur_metrics['time'][i] = info_dict_forward['time']
 
         # save info_dict
@@ -185,7 +186,6 @@ def fit_sequence_of_scene_flow_field(
     cur_metrics = {label:round(cur_metrics[label].mean(), 4) for label in cur_metrics.keys()}
     csv_writer.writerow(cur_metrics)
     logging.info(cur_metrics)
-
 
     return cur_metrics
 
@@ -198,9 +198,10 @@ if __name__ == "__main__":
     parser.add_argument('--lr', type=float, default=0.003, metavar='LR', help='Learning rate.')#0.001
     parser.add_argument('--momentum', type=float, default=0, metavar='M', help='SGD momentum (default: 0.9).')
     parser.add_argument('--device', default='cuda:0', type=str, help='device: cpu? cuda?')
-    parser.add_argument('--dataset_path', type=str, default='/mnt/088A6CBB8A6CA742/av1/av1_traj', metavar='N', help='Dataset path.')
+    parser.add_argument('--dataset_path', type=str, default='/home/msc_lab/zxh/MBNSF/data/av1_traj', metavar='N', help='Dataset path.')
     parser.add_argument('--time', dest='time', action='store_true', default=True, help='Count the execution time of each step.')
     parser.add_argument('--traj_len', type=int, default=25, help='point cloud sequence length for the trajectory.')
+    parser.add_argument('--enforce_skip_metrics', action='store_true')
     
     # For neural prior
     parser.add_argument('--weight_decay', type=float, default=0, metavar='N', help='Weight decay.')
@@ -248,18 +249,31 @@ if __name__ == "__main__":
         data = np.load(fi_name, allow_pickle=True)
 
         pc_list = [data['pcs'][i] for i in range(options.traj_len)]
-        flow_gt_list = [data['flos'][i] for i in range(options.traj_len-1)]
+        try:
+            if option.enforce_skip_metrics: assert 0==1
+            flow_gt_list = [data['flos'][i] for i in range(options.traj_len-1)]
+            traj_gt = data['traj'][:, :options.traj_len]
+            traj_val_mask = data['traj_val_mask'][:, :options.traj_len]
+            skip_metrics = False
+        except:
+            skip_metrics = True
+            flow_gt_list = None
+            traj_gt = None
+            traj_val_mask = None
+            print("Missing flow/traj gt data. Skipped metrics calculation.")
 
         cur_exp_dir = os.path.join(exp_dir_path, log_id)
         os.makedirs(cur_exp_dir, exist_ok=True)
         
-        metrics = fit_sequence_of_scene_flow_field(cur_exp_dir, pc_list, options, flow_gt_list, data['traj'][:, :options.traj_len], data['traj_val_mask'][:, :options.traj_len])
-        seq_metrics['epe'][fi_id] = metrics['epe']
-        seq_metrics['acc_strict'][fi_id] = metrics['acc_strict']
-        seq_metrics['acc_relax'][fi_id] = metrics['acc_relax']
-        seq_metrics['angle_error'][fi_id] = metrics['angle_error']
-        seq_metrics['outlier'][fi_id] = metrics['outlier']
+        metrics = fit_sequence_of_scene_flow_field(cur_exp_dir, pc_list, options, flow_gt_list, traj_gt, traj_val_mask)
+        if not skip_metrics:
+            seq_metrics['epe'][fi_id] = metrics['epe']
+            seq_metrics['acc_strict'][fi_id] = metrics['acc_strict']
+            seq_metrics['acc_relax'][fi_id] = metrics['acc_relax']
+            seq_metrics['angle_error'][fi_id] = metrics['angle_error']
+            seq_metrics['outlier'][fi_id] = metrics['outlier']
         seq_metrics['time'][fi_id] = metrics['time']
+
     seq_metrics_mean = {label:round(seq_metrics[label].mean(), 4) for label in seq_metrics.keys()}
     logging.info('---------------------------------------')
     logging.info('Final SF Metrics')
